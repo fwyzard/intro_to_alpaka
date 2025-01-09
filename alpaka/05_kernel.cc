@@ -47,8 +47,8 @@ struct VectorAddKernel3D {
                                 T* __restrict__ out,
                                 Vec3D size) const {
     for (auto ndindex : alpaka::uniformElementsND(acc, size)) {
-      auto index = (ndindex[0] * size[1] + ndindex[1]) * size[2] + ndindex[2];
-      out[index] = in1[index] + in2[index];
+      auto const linearizedIndex = alpaka::mapIdx<1u>(ndindex, size)[0u];
+      out[linearizedIndex] = in1[linearizedIndex] + in2[linearizedIndex];
     }
   }
 };
