@@ -23,9 +23,13 @@ CXX  := g++
 NVCC := $(CUDA_BASE)/bin/nvcc
 HIPCC := $(ROCM_BASE)/bin/hipcc
 
-CXXFLAGS       := -std=c++17 -O2 -g -I$(ALPAKA_BASE)/include
+CUDA_ARCH      := sm_87
+ROCM_ARCH      := gfx1100
+
+CXXFLAGS       := -std=c++20 -O2 -g -I$(ALPAKA_BASE)/include
 CXX_HOST_FLAGS := -pthread
-CXX_CUDA_FLAGS := --expt-relaxed-constexpr
+CXX_CUDA_FLAGS := -arch=$(CUDA_ARCH) --extended-lambda --expt-relaxed-constexpr
+CXX_ROCM_FLAGS := --offload-arch=$(ROCM_ARCH)
 
 %_cpu: %.cc
 	$(CXX) $(CXXFLAGS) $(CXX_HOST_FLAGS) -DALPAKA_ACC_CPU_B_SEQ_T_SEQ_ENABLED $< -o $@
@@ -40,5 +44,5 @@ CXX_CUDA_FLAGS := --expt-relaxed-constexpr
 	$(NVCC) -x cu -ccbin $(CXX) $(CXXFLAGS) $(CXX_CUDA_FLAGS) -Xcompiler '$(CXX_HOST_FLAGS)' -DALPAKA_ACC_GPU_CUDA_ENABLED $< -o $@
 
 %_hip: %.cc
-	$(HIPCC) $(CXXFLAGS) -DALPAKA_ACC_GPU_HIP_ENABLED $< -o $@
+	$(HIPCC) $(CXXFLAGS) $(CXX_HOST_FLAGS) $(CXX_ROCM_FLAGS) -DALPAKA_ACC_GPU_HIP_ENABLED $< -o $@
 
