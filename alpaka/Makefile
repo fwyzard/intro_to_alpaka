@@ -1,6 +1,8 @@
 .PHONY: all clean
 
-TARGETS := 00_enumerate_cpu 00_enumerate_cuda 01_blocking_queue_cpu 02_nonblocking_queue_cpu 03_memory_cpu 03_memory_cuda 04_views_cpu 04_views_cuda 05_kernel_cpu 05_kernel_cuda
+SUFFIX  := cpu mt tbb cuda
+SOURCES := $(wildcard *.cc)
+TARGETS := $(foreach @, $(SUFFIX), $(SOURCES:%.cc=%_$@))
 
 all: $(TARGETS)
 
