@@ -12,14 +12,29 @@
 #include "config.h"
 #include "WorkDiv.hpp"
 
-struct VectorAddKernel {
+struct VectorAddKernel1D {
   template <typename TAcc, typename T>
   ALPAKA_FN_ACC void operator()(TAcc const& acc,
                                 T const* __restrict__ in1,
                                 T const* __restrict__ in2,
                                 T* __restrict__ out,
-                                uint32_t size) const {
-    for (auto index : alpaka::uniformElements(acc, size)) {
+                                Vec1D size) const {
+    for (auto ndindex : alpaka::uniformElementsND(acc, size)) {
+      auto index = ndindex[0];
+      out[index] = in1[index] + in2[index];
+    }
+  }
+};
+
+struct VectorAddKernel3D {
+  template <typename TAcc, typename T>
+  ALPAKA_FN_ACC void operator()(TAcc const& acc,
+                                T const* __restrict__ in1,
+                                T const* __restrict__ in2,
+                                T* __restrict__ out,
+                                Vec3D size) const {
+    for (auto ndindex : alpaka::uniformElementsND(acc, size)) {
+      auto const index = alpaka::mapIdx<1u>(ndindex, size)[0u];
       out[index] = in1[index] + in2[index];
     }
   }
@@ -64,14 +79,78 @@ void testVectorAddKernel(Host host, Platform platform, Device device) {
   // fill the output buffer with zeros; the size is known from the buffer objects
   alpaka::memset(queue, out_d, 0x00);
 
-  // launch the 1-dimensional kernel with scalar size
+  // launch the 1-dimensional kernel with vector size
   auto div = makeWorkDiv<Acc1D>(32, 32);
-  std::cout << "Testing VectorAddKernel with scalar indices with a grid of "
+  std::cout << "Testing VectorAddKernel1D with vector indices with a grid of "
             << alpaka::getWorkDiv<alpaka::Grid, alpaka::Blocks>(div) << " blocks x "
             << alpaka::getWorkDiv<alpaka::Block, alpaka::Threads>(div) << " threads x "
             << alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(div) << " elements...\n";
   alpaka::exec<Acc1D>(
-      queue, div, VectorAddKernel{}, in1_d.data(), in2_d.data(), out_d.data(), size);
+      queue, div, VectorAddKernel1D{}, in1_d.data(), in2_d.data(), out_d.data(), size);
+
+  // copy the results from the device to the host
+  alpaka::memcpy(queue, out_h, out_d);
+
+  // wait for all the operations to complete
+  alpaka::wait(queue);
+
+  // check the results
+  for (uint32_t i = 0; i < size; ++i) {
+    float sum = in1_h[i] + in2_h[i];
+    assert(out_h[i] < sum + epsilon);
+    assert(out_h[i] > sum - epsilon);
+  }
+  std::cout << "success\n";
+}
+
+void testVectorAddKernel3D(Host host, Platform platform, Device device) {
+  // random number generator with a gaussian distribution
+  std::random_device rd{};
+  std::default_random_engine rand{rd()};
+  std::normal_distribution<float> dist{0., 1.};
+
+  // tolerance
+  constexpr float epsilon = 0.000001;
+
+  // 3-dimensional and linearised buffer size
+  constexpr Vec3D ndsize = {50, 125, 16};
+  constexpr uint32_t size = ndsize.prod();
+
+  // allocate input and output host buffers in pinned memory accessible by the Platform devices
+  auto in1_h = alpaka::allocMappedBuf<float, uint32_t>(host, platform, size);
+  auto in2_h = alpaka::allocMappedBuf<float, uint32_t>(host, platform, size);
+  auto out_h = alpaka::allocMappedBuf<float, uint32_t>(host, platform, size);
+
+  // fill the input buffers with random data, and the output buffer with zeros
+  for (uint32_t i = 0; i < size; ++i) {
+    in1_h[i] = dist(rand);
+    in2_h[i] = dist(rand);
+    out_h[i] = 0.;
+  }
+
+  // run the test the given device
+  auto queue = Queue{device};
+
+  // allocate input and output buffers on the device
+  auto in1_d = alpaka::allocAsyncBuf<float, uint32_t>(queue, size);
+  auto in2_d = alpaka::allocAsyncBuf<float, uint32_t>(queue, size);
+  auto out_d = alpaka::allocAsyncBuf<float, uint32_t>(queue, size);
+
+  // copy the input data to the device; the size is known from the buffer objects
+  alpaka::memcpy(queue, in1_d, in1_h);
+  alpaka::memcpy(queue, in2_d, in2_h);
+
+  // fill the output buffer with zeros; the size is known from the buffer objects
+  alpaka::memset(queue, out_d, 0x00);
+
+  // launch the 3-dimensional kernel
+  auto div = makeWorkDiv<Acc3D>({5, 5, 1}, {4, 4, 4});
+  std::cout << "Testing VectorAddKernel3D with vector indices with a grid of "
+            << alpaka::getWorkDiv<alpaka::Grid, alpaka::Blocks>(div) << " blocks x "
+            << alpaka::getWorkDiv<alpaka::Block, alpaka::Threads>(div) << " threads x "
+            << alpaka::getWorkDiv<alpaka::Thread, alpaka::Elems>(div) << " elements...\n";
+  alpaka::exec<Acc3D>(
+      queue, div, VectorAddKernel3D{}, in1_d.data(), in2_d.data(), out_d.data(), ndsize);
 
   // copy the results from the device to the host
   alpaka::memcpy(queue, out_h, out_d);
@@ -108,4 +187,5 @@ int main() {
   std::cout << "Device: " << alpaka::getName(device) << '\n';
 
   testVectorAddKernel(host, platform, device);
+  testVectorAddKernel3D(host, platform, device);
 }
