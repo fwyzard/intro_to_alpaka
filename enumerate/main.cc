@@ -36,5 +36,4 @@ int main(int argc, const char* argv[]) {
   alpaka_threads_sync::enumerate(verbose);
   alpaka_tbb_sync::enumerate(verbose);
   alpaka_cuda_async::enumerate(verbose);
-  alpaka_rocm_async::enumerate(verbose);
 }

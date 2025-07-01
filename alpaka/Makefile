@@ -1,6 +1,6 @@
 .PHONY: all clean
 
-SUFFIX  := cpu mt tbb cuda hip
+SUFFIX  := cpu mt tbb cuda # hip
 SOURCES := $(wildcard *.cc)
 TARGETS := $(foreach @, $(SUFFIX), $(SOURCES:%.cc=%_$@))
 
@@ -19,26 +19,22 @@ hip: $(SOURCES:%.cc=%_hip)
 clean:
 	rm -f $(TARGETS)
 
-# NVIDIA CUDA
-CUDA_BASE   ?= /usr/local/cuda
-
-# ROCM_BASE
-ROCM_BASE   ?= /opt/rocm
+# use GCC and CUDA from the default environment
 
 # Intel TBB library
-TBB_BASE    ?= /usr
+TBB_BASE    ?= /opt/miniforge3
 
 # mdspan library (included in c++23)
-MDSPAN_BASE ?= /home/fwyzard/src/alpaka-group/mdspan
+MDSPAN_BASE ?= /opt/mdspan
 
 # Alpaka library
-ALPAKA_BASE ?= /home/fwyzard/src/alpaka-group/alpaka
+ALPAKA_BASE ?= /opt/alpaka
 
 CXX  := g++
-NVCC := $(CUDA_BASE)/bin/nvcc
-HIPCC := $(ROCM_BASE)/bin/hipcc
+NVCC := nvcc
+HIPCC := hipcc
 
-CUDA_ARCH      := sm_86
+CUDA_ARCH      := sm_70
 ROCM_ARCH      := gfx1100
 
 CXXFLAGS       := -std=c++20 -O2 -g -I$(MDSPAN_BASE)/include -I$(ALPAKA_BASE)/include -DALPAKA_HAS_STD_ATOMIC_REF -DALPAKA_USE_MDSPAN
@@ -56,7 +52,7 @@ CXX_ROCM_FLAGS := --offload-arch=$(ROCM_ARCH)
 	$(CXX) $(CXXFLAGS) $(CXX_HOST_FLAGS) -I$(TBB_BASE)/include -DALPAKA_ACC_CPU_B_TBB_T_SEQ_ENABLED $< -L$(TBB_BASE)/lib -ltbb -o $@
 
 %_cuda: %.cc
-	$(NVCC) -x cu -ccbin $(CXX) $(CXXFLAGS) $(CXX_CUDA_FLAGS) -Xcompiler '$(CXX_HOST_FLAGS)' -DALPAKA_ACC_GPU_CUDA_ENABLED $< -o $@
+	$(NVCC) -x cu $(CXXFLAGS) $(CXX_CUDA_FLAGS) -Xcompiler '$(CXX_HOST_FLAGS)' -DALPAKA_ACC_GPU_CUDA_ENABLED $< -o $@
 
 %_hip: %.cc
 	$(HIPCC) $(CXXFLAGS) $(CXX_HOST_FLAGS) $(CXX_ROCM_FLAGS) -DALPAKA_ACC_GPU_HIP_ENABLED $< -o $@
