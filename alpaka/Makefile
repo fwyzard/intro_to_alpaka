@@ -16,6 +16,15 @@ cuda: $(SOURCES:%.cc=%_cuda)
 
 hip: $(SOURCES:%.cc=%_hip)
 
+define TARGET_RULE
+.PHONY: $1
+$1: $(foreach @,$(SUFFIX),$1_$@)
+	@true
+endef
+
+$(foreach TARGET,$(SOURCES:%.cc=%),$(eval $(call TARGET_RULE,$(TARGET))))
+
+
 clean:
 	rm -f $(TARGETS)
 
