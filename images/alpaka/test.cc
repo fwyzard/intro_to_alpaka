@@ -385,7 +385,8 @@ ImageDevice scale(Queue &queue, ImageDevice const &src, int width, int height) {
 
 // copy a source image into a target image, cropping any parts that fall outside
 // the target image
-void write_to(Image const &src, Image &dst, int x, int y) {
+void write_to(Queue &queue, ImageDevice const &src, ImageDevice &dst, int x,
+              int y) {
   // copying to an image with a different number of channels is not supported
   assert(src.channels_ == dst.channels_);
 
@@ -420,7 +421,13 @@ void write_to(Image const &src, Image &dst, int x, int y) {
   for (int y = 0; y < y_height; ++y) {
     int src_p = ((src_y_from + y) * src.width_ + src_x_from) * src.channels_;
     int dst_p = ((dst_y_from + y) * dst.width_ + dst_x_from) * dst.channels_;
-    std::memcpy(dst.data_ + dst_p, src.data_ + src_p, x_width * src.channels_);
+    auto src_view =
+        alpaka::createView(alpaka::getDev(queue), src.data_.data() + src_p,
+                           x_width * src.channels_);
+    auto dst_view =
+        alpaka::createView(alpaka::getDev(queue), dst.data_.data() + dst_p,
+                           x_width * src.channels_);
+    alpaka::memcpy(queue, dst_view, src_view);
   }
 
   auto finish = std::chrono::steady_clock::now();
@@ -576,22 +583,15 @@ int main(int argc, const char *argv[]) {
     ImageDevice tone2_d = tint(queue, gray_d, 100, 143, 47); // green-ish
     ImageDevice tone3_d = tint(queue, gray_d, 255, 162, 36); // gold-ish
 
-    Image gray(gray_d.width_, gray_d.height_, gray_d.channels_);
-    Image tone1(tone1_d.width_, tone1_d.height_, tone1_d.channels_);
-    Image tone2(tone2_d.width_, tone2_d.height_, tone2_d.channels_);
-    Image tone3(tone3_d.width_, tone3_d.height_, tone3_d.channels_);
-
-    copy_to_host(queue, gray, gray_d);
-    copy_to_host(queue, tone1, tone1_d);
-    copy_to_host(queue, tone2, tone2_d);
-    copy_to_host(queue, tone3, tone3_d);
-    alpaka::wait(queue);
+    ImageDevice out_d(queue, img.width_, img.height_, img.channels_);
+    write_to(queue, tone1_d, out_d, 0, 0);
+    write_to(queue, tone2_d, out_d, img.width_ * 0.5, 0);
+    write_to(queue, tone3_d, out_d, 0, img.height_ * 0.5);
+    write_to(queue, gray_d, out_d, img.width_ * 0.5, img.height_ * 0.5);
 
     Image out(img.width_, img.height_, img.channels_);
-    write_to(tone1, out, 0, 0);
-    write_to(tone2, out, img.width_ * 0.5, 0);
-    write_to(tone3, out, 0, img.height_ * 0.5);
-    write_to(gray, out, img.width_ * 0.5, img.height_ * 0.5);
+    copy_to_host(queue, out, out_d);
+    alpaka::wait(queue);
 
     std::cout << '\n';
     out.show(columns, rows);
