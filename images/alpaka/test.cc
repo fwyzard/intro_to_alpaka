@@ -454,24 +454,33 @@ ImageDevice grayscale(Queue &queue, ImageDevice const &src) {
 }
 
 // apply an RGB tint to an image
-Image tint(Image const &src, int r, int g, int b) {
+struct Tint {
+  ALPAKA_FN_ACC
+  void operator()(Acc2D const &acc, ImageView img, int r, int g, int b) const {
+    for (auto idx :
+         alpaka::uniformElementsND(acc, Vec2D{img.height_, img.width_})) {
+      int p = (idx.y() * img.width_ + idx.x()) * img.channels_;
+      int r0 = img.data_[p];
+      int g0 = img.data_[p + 1];
+      int b0 = img.data_[p + 2];
+      img.data_[p] = r0 * r / 255;
+      img.data_[p + 1] = g0 * g / 255;
+      img.data_[p + 2] = b0 * b / 255;
+    }
+  }
+};
+
+// apply an RGB tint to an image
+ImageDevice tint(Queue &queue, ImageDevice const &src, int r, int g, int b) {
   // non-RGB images are not supported
   assert(src.channels_ >= 3);
 
   auto start = std::chrono::steady_clock::now();
 
-  Image dst = src;
-  for (int y = 0; y < dst.height_; ++y) {
-    for (int x = 0; x < dst.width_; ++x) {
-      int p = (y * dst.width_ + x) * dst.channels_;
-      int r0 = dst.data_[p];
-      int g0 = dst.data_[p + 1];
-      int b0 = dst.data_[p + 2];
-      dst.data_[p] = r0 * r / 255;
-      dst.data_[p + 1] = g0 * g / 255;
-      dst.data_[p + 2] = b0 * b / 255;
-    }
-  }
+  ImageDevice dst(queue, src.width_, src.height_, src.channels_);
+  alpaka::memcpy(queue, dst.view(), src.view());
+  auto grid = makeWorkDiv<Acc2D>(Vec2D{16, 16}, Vec2D{16, 16});
+  alpaka::exec<Acc2D>(queue, grid, Tint{}, dst.imageView(), r, g, b);
 
   auto finish = std::chrono::steady_clock::now();
   float ms =
@@ -541,14 +550,20 @@ int main(int argc, const char *argv[]) {
     ImageDevice small_d =
         scale(queue, img_d, img_d.width_ * 0.5, img_d.height_ * 0.5);
     ImageDevice gray_d = grayscale(queue, small_d);
+    ImageDevice tone1_d = tint(queue, gray_d, 168, 56, 172); // purple-ish
+    ImageDevice tone2_d = tint(queue, gray_d, 100, 143, 47); // green-ish
+    ImageDevice tone3_d = tint(queue, gray_d, 255, 162, 36); // gold-ish
 
     Image gray(gray_d.width_, gray_d.height_, gray_d.channels_);
-    copy_to_host(queue, gray, gray_d);
-    alpaka::wait(queue);
+    Image tone1(tone1_d.width_, tone1_d.height_, tone1_d.channels_);
+    Image tone2(tone2_d.width_, tone2_d.height_, tone2_d.channels_);
+    Image tone3(tone3_d.width_, tone3_d.height_, tone3_d.channels_);
 
-    Image tone1 = tint(gray, 168, 56, 172); // purple-ish
-    Image tone2 = tint(gray, 100, 143, 47); // green-ish
-    Image tone3 = tint(gray, 255, 162, 36); // gold-ish
+    copy_to_host(queue, gray, gray_d);
+    copy_to_host(queue, tone1, tone1_d);
+    copy_to_host(queue, tone2, tone2_d);
+    copy_to_host(queue, tone3, tone3_d);
+    alpaka::wait(queue);
 
     Image out(img.width_, img.height_, img.channels_);
     write_to(tone1, out, 0, 0);
