@@ -1,0 +1,5 @@
+/test_*
+/out*
+/fmt
+/libsixel
+/stb
