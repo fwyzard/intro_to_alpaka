@@ -1,5 +1,6 @@
-/test
-/out*
-/fmt
-/libsixel
-/stb
+test
+out*
+fmt
+libsixel
+libsixel.so.1
+stb
