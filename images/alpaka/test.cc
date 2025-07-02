@@ -217,13 +217,25 @@ struct Image {
     return alpaka::ViewConst(
         alpaka::createView(host, data_, Vec1D{width_ * height_ * channels_}));
   }
+
   auto span() {
     return std::span<unsigned char>(data_, width_ * height_ * channels_);
+  }
+
+  auto span() const {
+    return std::span<const unsigned char>(data_, width_ * height_ * channels_);
   }
 };
 
 struct ImageView {
   std::span<unsigned char> data_;
+  int width_ = 0;
+  int height_ = 0;
+  int channels_ = 0;
+};
+
+struct ImageViewConst {
+  std::span<const unsigned char> data_;
   int width_ = 0;
   int height_ = 0;
   int channels_ = 0;
@@ -248,8 +260,17 @@ struct ImageDevice {
     return std::span<unsigned char>(data_.data(), width_ * height_ * channels_);
   }
 
+  auto span() const {
+    return std::span<const unsigned char>(data_.data(),
+                                          width_ * height_ * channels_);
+  }
+
   ImageView imageView() {
     return ImageView{span(), width_, height_, channels_};
+  }
+
+  ImageViewConst imageView() const {
+    return ImageViewConst{span(), width_, height_, channels_};
   }
 };
 
@@ -276,7 +297,8 @@ bool verbose = false;
 // make a scaled copy of an image
 struct Scale {
   ALPAKA_FN_ACC
-  void operator()(Acc2D const &acc, ImageView src, ImageView out) const {
+  void operator()(Acc2D const &acc, const ImageViewConst src,
+                  ImageView out) const {
 
     for (int y : alpaka::uniformElementsAlongY(acc, out.height_)) {
       // map the row of the scaled image to the nearest rows of the original
@@ -335,7 +357,7 @@ struct Scale {
   }
 };
 
-ImageDevice scale(Queue &queue, ImageDevice &src, int width, int height) {
+ImageDevice scale(Queue &queue, ImageDevice const &src, int width, int height) {
   if (width == src.width_ and height == src.height_) {
     // if the dimensions are the same, return the same image
     return src;
