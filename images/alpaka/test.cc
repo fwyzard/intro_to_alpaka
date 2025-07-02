@@ -213,6 +213,10 @@ struct Image {
     return alpaka::createView(host, data_, Vec1D{width_ * height_ * channels_});
   }
 
+  auto view() const {
+    return alpaka::ViewConst(
+        alpaka::createView(host, data_, Vec1D{width_ * height_ * channels_}));
+  }
   auto span() {
     return std::span<unsigned char>(data_, width_ * height_ * channels_);
   }
@@ -237,6 +241,8 @@ struct ImageDevice {
         width_{width}, height_{height}, channels_{channels} {}
 
   auto view() { return data_; }
+
+  auto view() const { return alpaka::ViewConst(data_); }
 
   auto span() {
     return std::span<unsigned char>(data_.data(), width_ * height_ * channels_);
@@ -405,27 +411,35 @@ void write_to(Image const &src, Image &dst, int x, int y) {
   }
 }
 
+struct Grayscale {
+  ALPAKA_FN_ACC
+  void operator()(Acc2D const &acc, ImageView img) const {
+    for (auto idx :
+         alpaka::uniformElementsND(acc, Vec2D{img.height_, img.width_})) {
+      int p = (idx.y() * img.width_ + idx.x()) * img.channels_;
+      int r = img.data_[p];
+      int g = img.data_[p + 1];
+      int b = img.data_[p + 2];
+      // NTSC values for RGB to grayscale conversion
+      int y = (299 * r + 587 * g + 114 * b) / 1000;
+      img.data_[p] = y;
+      img.data_[p + 1] = y;
+      img.data_[p + 2] = y;
+    }
+  }
+};
+
 // convert an image to grayscale
-Image grayscale(Image const &src) {
+ImageDevice grayscale(Queue &queue, ImageDevice const &src) {
   // non-RGB images are not supported
   assert(src.channels_ >= 3);
 
   auto start = std::chrono::steady_clock::now();
 
-  Image dst = src;
-  for (int y = 0; y < dst.height_; ++y) {
-    for (int x = 0; x < dst.width_; ++x) {
-      int p = (y * dst.width_ + x) * dst.channels_;
-      int r = dst.data_[p];
-      int g = dst.data_[p + 1];
-      int b = dst.data_[p + 2];
-      // NTSC values for RGB to grayscale conversion
-      int y = (299 * r + 587 * g + 114 * b) / 1000;
-      dst.data_[p] = y;
-      dst.data_[p + 1] = y;
-      dst.data_[p + 2] = y;
-    }
-  }
+  ImageDevice dst(queue, src.width_, src.height_, src.channels_);
+  alpaka::memcpy(queue, dst.view(), src.view());
+  auto grid = makeWorkDiv<Acc2D>(Vec2D{16, 16}, Vec2D{16, 16});
+  alpaka::exec<Acc2D>(queue, grid, Grayscale{}, dst.imageView());
 
   auto finish = std::chrono::steady_clock::now();
   float ms =
@@ -526,11 +540,12 @@ int main(int argc, const char *argv[]) {
     copy_to_device(queue, img_d, img);
     ImageDevice small_d =
         scale(queue, img_d, img_d.width_ * 0.5, img_d.height_ * 0.5);
-    Image small(small_d.width_, small_d.height_, small_d.channels_);
-    copy_to_host(queue, small, small_d);
+    ImageDevice gray_d = grayscale(queue, small_d);
+
+    Image gray(gray_d.width_, gray_d.height_, gray_d.channels_);
+    copy_to_host(queue, gray, gray_d);
     alpaka::wait(queue);
 
-    Image gray = grayscale(small);
     Image tone1 = tint(gray, 168, 56, 172); // purple-ish
     Image tone2 = tint(gray, 100, 143, 47); // green-ish
     Image tone3 = tint(gray, 255, 162, 36); // gold-ish
