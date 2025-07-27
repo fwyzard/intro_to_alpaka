@@ -101,6 +101,14 @@ using Queue = alpaka::Queue<Device, alpaka::Blocking>;
 
 #define ALPAKA_ACCELERATOR_NAMESPACE alpaka_tbb_sync
 
+#elif defined(ALPAKA_ACC_SYCL_ENABLED) && defined(ALPAKA_SYCL_ONEAPI_CPU)
+// Intel CPU backend
+using Tag = alpaka::TagCpuSycl;
+using Device = alpaka::Dev<alpaka::TagToAcc<Tag, Dim1D, uint32_t>>;
+using Queue = alpaka::Queue<Device, alpaka::NonBlocking>;
+
+#define ALPAKA_ACCELERATOR_NAMESPACE alpaka_syclcpu_async
+
 #elif defined(ALPAKA_ACC_SYCL_ENABLED) && defined(ALPAKA_SYCL_ONEAPI_GPU)
 // Intel GPU backend
 using Tag = alpaka::TagGpuSyclIntel;

@@ -43,7 +43,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         std::cout << "    - Accelerator name: " << alpaka::core::demangled<Acc3D> << '\n';
         auto const props = alpaka::getAccDevProps<Acc3D>(device);
         auto const globalMem = alpaka::getMemBytes(device);
+#ifndef ALPAKA_ACC_SYCL_ENABLED
         auto const freeMem = alpaka::getFreeMemBytes(device);
+#else
+        auto const freeMem = "n/a";
+#endif  // ALPAKA_ACC_SYCL_ENABLED
         std::cout << "        number of multi-processors:           " << props.m_multiProcessorCount << '\n';
         std::cout << "        global memory free / total (bytes):   " << freeMem << " / " << globalMem << '\n';
         std::cout << "        shared memory per block (bytes):      " << props.m_sharedMemSizeBytes << '\n';
@@ -66,5 +70,6 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     }
     std::cout << '\n';
   }
+
 
 }  // namespace ALPAKA_ACCELERATOR_NAMESPACE
