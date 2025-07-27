@@ -55,6 +55,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         std::cout << "        max number of elements per thread:    " << props.m_threadElemCountMax << '\n';
         std::cout << "        supported warp sizes:                 " << getWarpSizes(device) << '\n';
         std::cout << "        preferred warp size:                  " << getPreferredWarpSize(device) << '\n';
+        // test the execution of a kernel on the device
+        Queue queue(device);
+        WorkDiv1D grid{1u, 1u, 1u};
+        alpaka::exec<Acc1D>(queue, grid, [] ALPAKA_FN_ACC (Acc1D const& acc) {
+            printf("        kernel test:                          passed\n");
+        });
+        alpaka::wait(queue);
       }
     }
     std::cout << '\n';
