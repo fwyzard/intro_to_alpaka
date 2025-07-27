@@ -15,7 +15,7 @@ ROCM_BASE   ?= /opt/rocm
 TBB_BASE    ?= /usr
 
 # Alpaka library
-ALPAKA_BASE ?= $(HOME)/test/alpaka_enumerate/alpaka
+ALPAKA_BASE ?= $(HOME)/src/alpaka-group/alpaka
 
 CXX  := g++
 NVCC := $(CUDA_BASE)/bin/nvcc
@@ -27,7 +27,7 @@ ROCM_ARCH      := gfx1100
 CXXFLAGS       := -std=c++20 -O2 -g -I$(ALPAKA_BASE)/include -DALPAKA_HAS_STD_ATOMIC_REF
 CXX_HOST_FLAGS := -fPIC -pthread
 CXX_CUDA_FLAGS := -arch=$(CUDA_ARCH) -Wno-deprecated-gpu-targets --extended-lambda --expt-relaxed-constexpr
-CXX_ROCM_FLAGS := --gcc-toolchain=/opt/rh/gcc-toolset-14/root/usr --gcc-triple=x86_64-redhat-linux --offload-arch=$(ROCM_ARCH)
+CXX_ROCM_FLAGS := --gcc-toolchain=$(shell $(CXX) -v 2>&1 | grep Configured | xargs -n1 echo | grep '^--prefix' | cut -d= -f2-) --gcc-triple=$(shell $(CXX) -dumpmachine) --offload-arch=$(ROCM_ARCH)
 
 
 %.o: %.cc Makefile
