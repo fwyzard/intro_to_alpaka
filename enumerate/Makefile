@@ -15,23 +15,23 @@ ROCM_BASE   ?= /opt/rocm
 ONEAPI_BASE ?= /opt/intel/oneapi
 
 # Intel TBB library
-TBB_BASE    ?= /usr
+TBB_BASE    ?= /opt/intel/oneapi/tbb/latest
 
 # Alpaka library
-ALPAKA_BASE ?= $(HOME)/src/alpaka-group/alpaka
+ALPAKA_BASE ?= $(HOME)/public/alpaka
 
 CXX  := g++
 NVCC := $(CUDA_BASE)/bin/nvcc
 HIPCC := $(ROCM_BASE)/bin/hipcc
 ICPX := $(ONEAPI_BASE)/compiler/latest/bin/icpx
 
-CUDA_ARCH      := sm_86
+CUDA_ARCH      := sm_75
 ROCM_ARCH      := gfx1100
 SYCL_GPU_ARCH  := intel_gpu_tgllp
 
 CXXFLAGS       := -std=c++20 -O2 -g -I$(ALPAKA_BASE)/include -DALPAKA_HAS_STD_ATOMIC_REF
 CXX_HOST_FLAGS := -fPIC -pthread
-CXX_CUDA_FLAGS := -arch=$(CUDA_ARCH) -Wno-deprecated-gpu-targets --extended-lambda --expt-relaxed-constexpr
+CXX_CUDA_FLAGS := -arch=$(CUDA_ARCH) -Wno-deprecated-gpu-targets -Wno-deprecated-declarations --extended-lambda --expt-relaxed-constexpr
 CXX_ROCM_FLAGS := --gcc-toolchain=$(shell $(CXX) -v 2>&1 | grep Configured | xargs -n1 echo | grep '^--prefix' | cut -d= -f2-) --gcc-triple=$(shell $(CXX) -dumpmachine) --offload-arch=$(ROCM_ARCH)
 CXX_SYCL_CPU_FLAGS := --gcc-toolchain=$(shell $(CXX) -v 2>&1 | grep Configured | xargs -n1 echo | grep '^--prefix' | cut -d= -f2-) --gcc-triple=$(shell $(CXX) -dumpmachine) -fsycl -fsycl-targets=$(SYCL_GPU_ARCH) -I$(ONEAPI_BASE)/compiler/latest/include -I$(ONEAPI_BASE)/dpl/latest/include
 CXX_SYCL_GPU_FLAGS := --gcc-toolchain=$(shell $(CXX) -v 2>&1 | grep Configured | xargs -n1 echo | grep '^--prefix' | cut -d= -f2-) --gcc-triple=$(shell $(CXX) -dumpmachine) -fsycl -fsycl-targets=spir64_x86_64 -I$(ONEAPI_BASE)/compiler/latest/include -I$(ONEAPI_BASE)/dpl/latest/include

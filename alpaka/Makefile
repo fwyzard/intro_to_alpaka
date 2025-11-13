@@ -26,24 +26,24 @@ CUDA_BASE   ?= /usr/local/cuda
 ROCM_BASE   ?= /opt/rocm
 
 # Intel TBB library
-TBB_BASE    ?= /usr
+TBB_BASE    ?= /opt/intel/oneapi/tbb/latest
 
 # mdspan library (included in c++23)
-MDSPAN_BASE ?= /home/fwyzard/src/alpaka-group/mdspan
+MDSPAN_BASE ?= $(HOME)/public/mdspan
 
 # Alpaka library
-ALPAKA_BASE ?= /home/fwyzard/src/alpaka-group/alpaka
+ALPAKA_BASE ?= $(HOME)/public/alpaka
 
 CXX  := g++
 NVCC := $(CUDA_BASE)/bin/nvcc
 HIPCC := $(ROCM_BASE)/bin/hipcc
 
-CUDA_ARCH      := sm_86
+CUDA_ARCH      := sm_75
 ROCM_ARCH      := gfx1100
 
 CXXFLAGS       := -std=c++20 -O2 -g -I$(MDSPAN_BASE)/include -I$(ALPAKA_BASE)/include -DALPAKA_HAS_STD_ATOMIC_REF -DALPAKA_USE_MDSPAN
 CXX_HOST_FLAGS := -pthread
-CXX_CUDA_FLAGS := -arch=$(CUDA_ARCH) -Wno-deprecated-gpu-targets --extended-lambda --expt-relaxed-constexpr
+CXX_CUDA_FLAGS := -arch=$(CUDA_ARCH) -Wno-deprecated-gpu-targets -Wno-deprecated-declarations --extended-lambda --expt-relaxed-constexpr
 CXX_ROCM_FLAGS := --offload-arch=$(ROCM_ARCH)
 
 %_cpu: %.cc
