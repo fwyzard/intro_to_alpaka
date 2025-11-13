@@ -1,5 +1,5 @@
 /*
- * g++ -std=c++17 -O2 -g 00_hello_world.cc -o 00_hello_world
+ * g++ -std=c++20 -O2 -g 00_hello_world.cc -o 00_hello_world
  */
 
 #include <cmath>

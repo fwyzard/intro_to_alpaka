@@ -1,5 +1,5 @@
 /*
- * nvcc -std=c++17 -O2 -g 01_hello_world.cu -o 01_hello_world
+ * nvcc -std=c++20 -O2 -g 01_hello_world.cu -o 01_hello_world
  */
 
 #include <cmath>
