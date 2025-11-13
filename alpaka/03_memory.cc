@@ -47,8 +47,14 @@ int main() {
     // set the device memory to all zeros (byte-wise, not element-wise)
     alpaka::memset(queue, device_buffer, 0x00);
 
+    // make the buffer constant
+    auto const_device_buffer = alpaka::makeConstBuf(std::move(device_buffer));
+
+    // this would not compile, the content of a ConstBuffer cannot be modified
+    //alpaka::memset(queue, const_device_buffer, 0xff);
+
     // copy the contents of the device buffer to the host buffer
-    alpaka::memcpy(queue, host_buffer, device_buffer);
+    alpaka::memcpy(queue, host_buffer, const_device_buffer);
 
     // the device buffer goes out of scope, but the memory is freed only
     // once all enqueued operations have completed
