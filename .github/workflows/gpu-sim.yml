@@ -1,0 +1,92 @@
+name: GPU examples (simulated)
+
+# Optional, non-required check. The hosted runners have no GPU, so this builds
+# the alpaka examples with the CUDA backend only (no host CPU backend, so they
+# can only run on the device) and runs them on a simulated NVIDIA H100
+# (https://github.com/pantheongpu/pantheonsim). A simulator cannot reproduce
+# hardware-specific behaviour or timing, so it complements real-GPU testing and
+# does not replace it.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "alpaka/**"
+      - ".github/workflows/gpu-sim.yml"
+
+concurrency:
+  group: gpu-sim-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  ALPAKA_VERSION: 2.1.1
+  MDSPAN_VERSION: mdspan-0.6.0
+
+jobs:
+  cuda-sim:
+    name: CUDA 13.0, simulated H100
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up the simulated GPU and CUDA toolkit
+        uses: pantheongpu/setup-pantheonsim@deff5781e8adfd83dec98dd5242dcbc96a564773 # v0.1.10
+        with:
+          gpu: nvidia/h100
+          cuda-toolkit: "13.0"
+
+      # The examples expect alpaka and mdspan checkouts (ALPAKA_BASE and
+      # MDSPAN_BASE in alpaka/Makefile).
+      - name: Fetch alpaka and mdspan
+        run: |
+          git clone --depth 1 --branch "$ALPAKA_VERSION" https://github.com/alpaka-group/alpaka.git "$RUNNER_TEMP/alpaka"
+          git clone --depth 1 --branch "$MDSPAN_VERSION" https://github.com/kokkos/mdspan.git "$RUNNER_TEMP/mdspan"
+
+      # compute_90 embeds PTX only: the simulator JIT-compiles PTX and does not
+      # run SASS. The shared CUDA runtime is required by the simulator.
+      - name: Build the CUDA examples
+        working-directory: alpaka
+        run: |
+          vgpu run --preload make -j3 \
+            ALPAKA_BASE="$RUNNER_TEMP/alpaka" \
+            MDSPAN_BASE="$RUNNER_TEMP/mdspan" \
+            CUDA_BASE="$(dirname "$(dirname "$(command -v nvcc)")")" \
+            CUDA_ARCH=compute_90 \
+            CXX_CUDA_FLAGS="-arch=compute_90 -cudart shared -Wno-deprecated-gpu-targets --extended-lambda --expt-relaxed-constexpr" \
+            03_memory_cuda 04_views_cuda 05_kernel_cuda 06_kernelnd_cuda 07_mdspan_cuda
+
+      # 05, 06 and 07 add vectors on the device and assert the result on the
+      # host (assert is active: the Makefile does not define NDEBUG). 03 and 04
+      # memset a device buffer to zero and copy it over host data that holds
+      # 0..41, so the output must be 42 zeros. Each step fails on a non-zero
+      # exit code, on a CUDA or simulator error, when the virtual GPU was not
+      # initialized, and when the expected result is not printed.
+      - name: Run the examples
+        working-directory: alpaka
+        run: |
+          set -o pipefail
+          mkdir -p logs
+          run() {
+            local name=$1 pattern=$2 count=$3
+            echo "::group::$name"
+            vgpu run --gpu nvidia/h100 "./$name" 2>&1 | tee "logs/$name.log"
+            echo "::endgroup::"
+            grep -q 'virtual GPU platform initialized' "logs/$name.log" || { echo "::error::$name did not run on the virtual GPU"; exit 1; }
+            if grep -Eqi 'VirtualGPU error|CUDA error|no CUDA-capable|no device|Assertion' "logs/$name.log"; then
+              echo "::error::$name: device missing or error"; exit 1
+            fi
+            [ "$(grep -Ec "$pattern" "logs/$name.log")" -eq "$count" ] || { echo "::error::$name: expected $count line(s) matching '$pattern'"; exit 1; }
+          }
+          zeros=$(printf '0 %.0s' $(seq 42))
+          run 03_memory_cuda   "^${zeros}\$" 1
+          run 04_views_cuda    "^${zeros}\$" 1
+          run 05_kernel_cuda   '^success$' 1
+          run 06_kernelnd_cuda '^success$' 2
+          run 07_mdspan_cuda   '^success$' 1
